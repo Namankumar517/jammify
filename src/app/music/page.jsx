@@ -98,7 +98,6 @@ export default function MusicPage() {
   const [playlistColors, setPlaylistColors] = useState({});
   const [hoveredColor, setHoveredColor] = useState(null);
   const [playingId, setPlayingId] = useState(null);
-  const [saavnSongs, setSaavnSongs] = useState([]);
 
   // Read feed preference from localStorage (set in Settings)
   const [feedPreference, setFeedPreference] = useState('all');
@@ -412,29 +411,6 @@ export default function MusicPage() {
     fetchDbSections();
     return () => { isMounted = false; };
   }, []);
-
-  useEffect(() => {
-    const loadSongs = async () => {
-      try {
-        const res = await fetch("https://saavn.sumit.co/api/search/songs?query=top");
-        const data = await res.json();
-        const songs = data?.data?.results || [];
-        setSaavnSongs(
-          songs.map(song => ({
-            id: song.id,
-            name: song.name,
-            image: song.image || [],
-            songCount: 1,
-            source: 'saavn'
-          }))
-        );
-      } catch (e) {
-        console.log(e);
-      }
-    };
-    loadSongs();
-  }, []);
-
 
   // Fetch "Popular Hindi Playlists" section from the playlists DB
   useEffect(() => {
@@ -1217,14 +1193,7 @@ export default function MusicPage() {
 
           {/* Recommended Mixes — above Recently Played */}
           {(mixesLoading || recommendedMixes.length > 0) && (
-            
-              <PlaylistSection
-                title="Trending Songs"
-                playlists={saavnSongs}
-                loading={false}
-              />
-
-<PlaylistSection
+            <PlaylistSection
               title="Your Mixes"
               playlists={recommendedMixes}
               loading={mixesLoading || mixesRefreshing}
