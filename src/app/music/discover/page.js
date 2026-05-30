@@ -23,116 +23,90 @@ import { PlaylistSection } from "@/components/music/playlist-section";
 
 export default function DiscoverPage() {
   const router = useRouter();
-  const [trendingPlaylists, setTrendingPlaylists] = useState([]);
-  const [trendingLoading, setTrendingLoading] = useState(true);
-  const [recommendations, setRecommendations] = useState([]);
-  const [recommendationsLoading, setRecommendationsLoading] = useState(true);
-  const [topCharts, setTopCharts] = useState([]);
-  const [topChartsLoading, setTopChartsLoading] = useState(true);
+  const [sections, setSections] = useState([]);
+  const [sectionsLoading, setSectionsLoading] = useState(true);
+  const [sectionPlaylists, setSectionPlaylists] = useState({});
+  const [playlistsLoading, setPlaylistsLoading] = useState({});
 
-  // Fetch trending playlists
+  // Fetch all sections from MongoDB
   useEffect(() => {
     let isMounted = true;
-    const fetchTrending = async () => {
+    const fetchSections = async () => {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-        const res = await fetch(
-          `${apiUrl}/api/search/playlists?query=trending&page=0&limit=12`
-        );
+        const res = await fetch("/api/sections");
         const data = await res.json();
 
-        if (isMounted && data.success && data.data?.results) {
-          setTrendingPlaylists(
-            data.data.results.map((p) => ({
-              id: p.id,
-              name: p.title,
+        if (isMounted && data.success && data.data) {
+          setSections(data.data);
+          // Initialize loading states for each section
+          const loadingStates = {};
+          data.data.forEach((section) => {
+            loadingStates[section._id] = true;
+          });
+          setPlaylistsLoading(loadingStates);
+        }
+      } catch (err) {
+        console.error("Error fetching sections:", err);
+      } finally {
+        if (isMounted) setSectionsLoading(false);
+      }
+    };
+
+    fetchSections();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Fetch playlists for each section from MongoDB
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchPlaylistsForSections = async () => {
+      if (sections.length === 0) return;
+
+      for (const section of sections) {
+        try {
+          const res = await fetch(
+            `/api/spotify-playlists?sectionId=${section._id}&limit=12`
+          );
+          const data = await res.json();
+
+          if (isMounted && data.success && data.data) {
+            const playlists = data.data.map((p) => ({
+              id: p._id,
+              name: p.name,
               image: p.image ? [{ quality: "default", url: p.image }] : [],
               songCount: p.songCount || 0,
               description: p.description || "",
-              source: "jiosaavn",
-            }))
-          );
+              source: "spotify",
+              songIds: p.songIds || [],
+            }));
+
+            setSectionPlaylists((prev) => ({
+              ...prev,
+              [section._id]: playlists,
+            }));
+
+            setPlaylistsLoading((prev) => ({
+              ...prev,
+              [section._id]: false,
+            }));
+          }
+        } catch (err) {
+          console.error(`Error fetching playlists for section ${section._id}:`, err);
+          setPlaylistsLoading((prev) => ({
+            ...prev,
+            [section._id]: false,
+          }));
         }
-      } catch (err) {
-        console.error("Error fetching trending playlists:", err);
-      } finally {
-        if (isMounted) setTrendingLoading(false);
       }
     };
 
-    fetchTrending();
+    if (sections.length > 0) {
+      fetchPlaylistsForSections();
+    }
+
     return () => { isMounted = false; };
-  }, []);
-
-  // Fetch recommendations
-  useEffect(() => {
-    let isMounted = true;
-    const fetchRecommendations = async () => {
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-        const res = await fetch(
-          `${apiUrl}/api/search/playlists?query=recommendation&page=0&limit=12`
-        );
-        const data = await res.json();
-
-        if (isMounted && data.success && data.data?.results) {
-          setRecommendations(
-            data.data.results
-              .slice(0, 6)
-              .map((p) => ({
-                id: p.id,
-                name: p.title,
-                image: p.image ? [{ quality: "default", url: p.image }] : [],
-                songCount: p.songCount || 0,
-                description: p.description || "",
-                source: "jiosaavn",
-              }))
-          );
-        }
-      } catch (err) {
-        console.error("Error fetching recommendations:", err);
-      } finally {
-        if (isMounted) setRecommendationsLoading(false);
-      }
-    };
-
-    fetchRecommendations();
-    return () => { isMounted = false; };
-  }, []);
-
-  // Fetch top charts
-  useEffect(() => {
-    let isMounted = true;
-    const fetchTopCharts = async () => {
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-        const res = await fetch(
-          `${apiUrl}/api/search/playlists?query=top%20charts&page=0&limit=12`
-        );
-        const data = await res.json();
-
-        if (isMounted && data.success && data.data?.results) {
-          setTopCharts(
-            data.data.results.map((p) => ({
-              id: p.id,
-              name: p.title,
-              image: p.image ? [{ quality: "default", url: p.image }] : [],
-              songCount: p.songCount || 0,
-              description: p.description || "",
-              source: "jiosaavn",
-            }))
-          );
-        }
-      } catch (err) {
-        console.error("Error fetching top charts:", err);
-      } finally {
-        if (isMounted) setTopChartsLoading(false);
-      }
-    };
-
-    fetchTopCharts();
-    return () => { isMounted = false; };
-  }, []);
+  }, [sections]);
 
   const handleCardClick = (playlist) => {
     router.push(
@@ -171,123 +145,63 @@ export default function DiscoverPage() {
                   Discover
                 </h1>
                 <p className="text-muted-foreground text-base">
-                  Explore trending playlists, personalized recommendations, and top charts
+                  Explore curated playlists and collections
                 </p>
               </div>
 
-              {/* Quick Browse Categories */}
-              <div>
-                <h2 className="text-2xl font-semibold mb-4">Browse by Category</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <Link href="/music/discover/playlists">
-                    <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                      <h3 className="font-semibold text-lg">Trending Playlists</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Discover what's hot right now</p>
-                      <p className="text-xs text-muted-foreground mt-3">{trendingPlaylists.length} playlists</p>
-                    </div>
-                  </Link>
-
-                  <Link href="/music/discover/top-charts">
-                    <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                      <h3 className="font-semibold text-lg">Top Charts</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Most played and liked tracks</p>
-                      <p className="text-xs text-muted-foreground mt-3">{topCharts.length} playlists</p>
-                    </div>
-                  </Link>
-
-                  <Link href="/music/discover/genres">
-                    <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                      <h3 className="font-semibold text-lg">Genres</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Browse music by genre</p>
-                    </div>
-                  </Link>
-
-                  <Link href="/music/discover/new-releases">
-                    <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                      <h3 className="font-semibold text-lg">New Releases</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Latest music releases</p>
-                    </div>
-                  </Link>
-
-                  <Link href="/music/discover/community">
-                    <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                      <h3 className="font-semibold text-lg">Community Playlists</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Playlists created by our community</p>
-                    </div>
-                  </Link>
-
-                  <Link href="/music/discover/recently-played">
-                    <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                      <h3 className="font-semibold text-lg">Recently Played</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Get back to your listening history</p>
-                    </div>
-                  </Link>
-                </div>
-              </div>
-
-              {/* Trending Playlists */}
-              {trendingPlaylists.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-semibold">Trending Now</h2>
-                    <Link href="/music/discover/playlists">
-                      <Button variant="ghost">See All →</Button>
-                    </Link>
-                  </div>
-                  <PlaylistSection
-                    playlists={trendingPlaylists.slice(0, 6)}
-                    onPlaylistClick={handleCardClick}
-                  />
-                </div>
-              )}
-
-              {/* Recommendations */}
-              {recommendations.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-semibold">Recommended For You</h2>
-                  </div>
-                  <PlaylistSection
-                    playlists={recommendations}
-                    onPlaylistClick={handleCardClick}
-                  />
-                </div>
-              )}
-
-              {/* Top Charts */}
-              {topCharts.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-semibold">Top Charts</h2>
-                    <Link href="/music/discover/top-charts">
-                      <Button variant="ghost">See All →</Button>
-                    </Link>
-                  </div>
-                  <PlaylistSection
-                    playlists={topCharts.slice(0, 6)}
-                    onPlaylistClick={handleCardClick}
-                  />
-                </div>
-              )}
-
-              {/* Loading state message */}
-              {trendingLoading && recommendationsLoading && topChartsLoading && (
+              {/* Loading State */}
+              {sectionsLoading && (
                 <div className="text-center py-12">
                   <p className="text-muted-foreground">Loading discover content...</p>
                 </div>
               )}
 
-              {/* Empty state */}
-              {!trendingLoading &&
-                !recommendationsLoading &&
-                !topChartsLoading &&
-                trendingPlaylists.length === 0 &&
-                recommendations.length === 0 &&
-                topCharts.length === 0 && (
-                  <div className="text-center py-12">
-                    <p className="text-muted-foreground">No content available</p>
-                  </div>
-                )}
+              {/* Sections with Playlists */}
+              {!sectionsLoading && sections.length > 0 && (
+                <div className="space-y-12">
+                  {sections.map((section) => {
+                    const playlists = sectionPlaylists[section._id] || [];
+                    const isLoading = playlistsLoading[section._id] !== false;
+
+                    return (
+                      <div key={section._id}>
+                        <div className="flex items-center justify-between mb-4">
+                          <h2 className="text-2xl font-semibold capitalize">
+                            {section.name}
+                          </h2>
+                          {playlists.length > 0 && (
+                            <Link href={`/music/section/${section._id}`}>
+                              <Button variant="ghost">See All →</Button>
+                            </Link>
+                          )}
+                        </div>
+
+                        {isLoading ? (
+                          <div className="text-center py-8">
+                            <p className="text-muted-foreground text-sm">Loading...</p>
+                          </div>
+                        ) : playlists.length > 0 ? (
+                          <PlaylistSection
+                            playlists={playlists.slice(0, 6)}
+                            onPlaylistClick={handleCardClick}
+                          />
+                        ) : (
+                          <div className="text-center py-8">
+                            <p className="text-muted-foreground text-sm">No playlists available</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Empty State */}
+              {!sectionsLoading && sections.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground">No content available</p>
+                </div>
+              )}
 
               {/* Bottom padding for music player */}
               <div className="pb-24" />
