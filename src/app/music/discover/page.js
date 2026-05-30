@@ -34,9 +34,10 @@ export default function DiscoverPage() {
         setIsLoading(true);
         
         // Fetch all three types in parallel
+        // Note: "recommended" query returns 0 results, using "best" instead
         const [trendingRes, recommendedRes, topChartsRes] = await Promise.all([
           fetch("https://saavn.sumit.co/api/search/playlists?query=trending&page=1&limit=12"),
-          fetch("https://saavn.sumit.co/api/search/playlists?query=recommended&page=1&limit=12"),
+          fetch("https://saavn.sumit.co/api/search/playlists?query=best&page=1&limit=12"),
           fetch("https://saavn.sumit.co/api/search/playlists?query=top+charts&page=1&limit=12"),
         ]);
 
