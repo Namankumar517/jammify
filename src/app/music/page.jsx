@@ -98,6 +98,14 @@ export default function MusicPage() {
   const [playlistColors, setPlaylistColors] = useState({});
   const [hoveredColor, setHoveredColor] = useState(null);
   const [playingId, setPlayingId] = useState(null);
+  
+  // Discover sections from saavn.sumit.co
+  const [discoverTrending, setDiscoverTrending] = useState([]);
+  const [discoverTrendingLoading, setDiscoverTrendingLoading] = useState(true);
+  const [discoverBest, setDiscoverBest] = useState([]);
+  const [discoverBestLoading, setDiscoverBestLoading] = useState(true);
+  const [discoverTopCharts, setDiscoverTopCharts] = useState([]);
+  const [discoverTopChartsLoading, setDiscoverTopChartsLoading] = useState(true);
 
   // Read feed preference from localStorage (set in Settings)
   const [feedPreference, setFeedPreference] = useState('all');
@@ -616,6 +624,78 @@ export default function MusicPage() {
     }, 1000);
     return () => clearInterval(timer);
   }, [refreshCooldown]);
+
+  // Fetch Discover sections from saavn.sumit.co
+  useEffect(() => {
+    let isMounted = true;
+    const fetchDiscoverSections = async () => {
+      try {
+        const [trendingRes, bestRes, chartsRes] = await Promise.all([
+          fetch("https://saavn.sumit.co/api/search/playlists?query=trending&page=1&limit=12"),
+          fetch("https://saavn.sumit.co/api/search/playlists?query=best&page=1&limit=12"),
+          fetch("https://saavn.sumit.co/api/search/playlists?query=top+charts&page=1&limit=12"),
+        ]);
+
+        const trendingData = await trendingRes.json();
+        const bestData = await bestRes.json();
+        const chartsData = await chartsRes.json();
+
+        if (isMounted) {
+          if (trendingData.success && trendingData.data?.results) {
+            setDiscoverTrending(
+              trendingData.data.results.map((p) => ({
+                id: p.id,
+                name: p.name,
+                image: p.image || [],
+                songCount: p.songCount || 0,
+                description: p.language || "",
+                source: "jiosaavn",
+              }))
+            );
+          }
+          setDiscoverTrendingLoading(false);
+
+          if (bestData.success && bestData.data?.results) {
+            setDiscoverBest(
+              bestData.data.results.slice(0, 6).map((p) => ({
+                id: p.id,
+                name: p.name,
+                image: p.image || [],
+                songCount: p.songCount || 0,
+                description: p.language || "",
+                source: "jiosaavn",
+              }))
+            );
+          }
+          setDiscoverBestLoading(false);
+
+          if (chartsData.success && chartsData.data?.results) {
+            setDiscoverTopCharts(
+              chartsData.data.results.map((p) => ({
+                id: p.id,
+                name: p.name,
+                image: p.image || [],
+                songCount: p.songCount || 0,
+                description: p.language || "",
+                source: "jiosaavn",
+              }))
+            );
+          }
+          setDiscoverTopChartsLoading(false);
+        }
+      } catch (err) {
+        console.error('Error fetching discover sections:', err);
+        if (isMounted) {
+          setDiscoverTrendingLoading(false);
+          setDiscoverBestLoading(false);
+          setDiscoverTopChartsLoading(false);
+        }
+      }
+    };
+
+    fetchDiscoverSections();
+    return () => { isMounted = false; };
+  }, []);
 
   const handlePlayClick = useCallback(async (item, type) => {
     if (type === 'liked-songs') {
@@ -1371,6 +1451,47 @@ export default function MusicPage() {
               loading={dbSections.danceHits.loading}
               onShowAll={() => dbSections.danceHits.sectionId && router.push(`/music/section/${dbSections.danceHits.sectionId}`)}
               onPlaylistClick={(playlist) => { router.push(`/music/playlists/${playlist.id}`); }}
+              onPlayClick={handlePlaylistPlay}
+              playingId={playingId}
+            />
+          )}
+
+          {/* Discover Sections from saavn.sumit.co */}
+          
+          {/* Trending from Discover */}
+          {(discoverTrendingLoading || discoverTrending.length > 0) && (
+            <PlaylistSection
+              title="Trending Now"
+              playlists={discoverTrending}
+              loading={discoverTrendingLoading}
+              onShowAll={() => router.push('/music/discover')}
+              onPlaylistClick={(playlist) => { router.push(`/music/playlist/${playlist.id}?songCount=${playlist.songCount || 50}`); }}
+              onPlayClick={handlePlaylistPlay}
+              playingId={playingId}
+            />
+          )}
+
+          {/* Best/Recommended from Discover */}
+          {(discoverBestLoading || discoverBest.length > 0) && (
+            <PlaylistSection
+              title="Recommended For You"
+              playlists={discoverBest}
+              loading={discoverBestLoading}
+              onShowAll={() => router.push('/music/discover')}
+              onPlaylistClick={(playlist) => { router.push(`/music/playlist/${playlist.id}?songCount=${playlist.songCount || 50}`); }}
+              onPlayClick={handlePlaylistPlay}
+              playingId={playingId}
+            />
+          )}
+
+          {/* Top Charts from Discover */}
+          {(discoverTopChartsLoading || discoverTopCharts.length > 0) && (
+            <PlaylistSection
+              title="Top Charts"
+              playlists={discoverTopCharts}
+              loading={discoverTopChartsLoading}
+              onShowAll={() => router.push('/music/discover')}
+              onPlaylistClick={(playlist) => { router.push(`/music/playlist/${playlist.id}?songCount=${playlist.songCount || 50}`); }}
               onPlayClick={handlePlaylistPlay}
               playingId={playingId}
             />
