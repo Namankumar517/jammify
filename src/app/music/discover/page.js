@@ -21,31 +21,35 @@ import {
 import { Button } from "@/components/ui/button";
 import { PlaylistSection } from "@/components/music/playlist-section";
 
+const JIOSAAVN_API = "https://saavn.sumit.co/api";
+
 export default function DiscoverPage() {
   const router = useRouter();
   const [trendingPlaylists, setTrendingPlaylists] = useState([]);
   const [trendingLoading, setTrendingLoading] = useState(true);
   const [recommendedPlaylists, setRecommendedPlaylists] = useState([]);
   const [recommendedLoading, setRecommendedLoading] = useState(true);
-  const [topCharts, setTopCharts] = useState([]);
+  const [topChartsPlaylists, setTopChartsPlaylists] = useState([]);
   const [topChartsLoading, setTopChartsLoading] = useState(true);
 
-  // Fetch trending playlists from saavn.sumit.co
+  // Fetch trending playlists
   useEffect(() => {
     let isMounted = true;
     const fetchTrending = async () => {
       try {
-        const res = await fetch("https://saavn.sumit.co/api/search/playlists?query=trending&page=1&limit=12");
+        const res = await fetch(
+          `${JIOSAAVN_API}/search/playlists?query=trending&page=1&limit=12`
+        );
         const data = await res.json();
 
-        if (isMounted && data.success && data.results) {
+        if (isMounted && data.success && data.data?.results) {
           setTrendingPlaylists(
-            data.results.map((p) => ({
+            data.data.results.map((p) => ({
               id: p.id,
-              name: p.title || p.name,
-              image: p.image ? [{ quality: "default", url: p.image }] : [],
+              name: p.name,
+              image: p.image || [],
               songCount: p.songCount || 0,
-              description: p.description || "",
+              description: p.language || "",
               source: "jiosaavn",
             }))
           );
@@ -61,24 +65,26 @@ export default function DiscoverPage() {
     return () => { isMounted = false; };
   }, []);
 
-  // Fetch recommended playlists from saavn.sumit.co
+  // Fetch recommended playlists
   useEffect(() => {
     let isMounted = true;
     const fetchRecommended = async () => {
       try {
-        const res = await fetch("https://saavn.sumit.co/api/search/playlists?query=recommended&page=1&limit=12");
+        const res = await fetch(
+          `${JIOSAAVN_API}/search/playlists?query=recommended&page=1&limit=12`
+        );
         const data = await res.json();
 
-        if (isMounted && data.success && data.results) {
+        if (isMounted && data.success && data.data?.results) {
           setRecommendedPlaylists(
-            data.results
+            data.data.results
               .slice(0, 6)
               .map((p) => ({
                 id: p.id,
-                name: p.title || p.name,
-                image: p.image ? [{ quality: "default", url: p.image }] : [],
+                name: p.name,
+                image: p.image || [],
                 songCount: p.songCount || 0,
-                description: p.description || "",
+                description: p.language || "",
                 source: "jiosaavn",
               }))
           );
@@ -94,22 +100,24 @@ export default function DiscoverPage() {
     return () => { isMounted = false; };
   }, []);
 
-  // Fetch top charts from saavn.sumit.co
+  // Fetch top charts playlists
   useEffect(() => {
     let isMounted = true;
     const fetchTopCharts = async () => {
       try {
-        const res = await fetch("https://saavn.sumit.co/api/search/playlists?query=top%20charts&page=1&limit=12");
+        const res = await fetch(
+          `${JIOSAAVN_API}/search/playlists?query=top+charts&page=1&limit=12`
+        );
         const data = await res.json();
 
-        if (isMounted && data.success && data.results) {
-          setTopCharts(
-            data.results.map((p) => ({
+        if (isMounted && data.success && data.data?.results) {
+          setTopChartsPlaylists(
+            data.data.results.map((p) => ({
               id: p.id,
-              name: p.title || p.name,
-              image: p.image ? [{ quality: "default", url: p.image }] : [],
+              name: p.name,
+              image: p.image || [],
               songCount: p.songCount || 0,
-              description: p.description || "",
+              description: p.language || "",
               source: "jiosaavn",
             }))
           );
@@ -182,7 +190,7 @@ export default function DiscoverPage() {
                     <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
                       <h3 className="font-semibold text-lg">Top Charts</h3>
                       <p className="text-sm text-muted-foreground mt-1">Most played and liked tracks</p>
-                      <p className="text-xs text-muted-foreground mt-3">{topCharts.length} playlists</p>
+                      <p className="text-xs text-muted-foreground mt-3">{topChartsPlaylists.length} playlists</p>
                     </div>
                   </Link>
 
@@ -225,28 +233,40 @@ export default function DiscoverPage() {
                       <Button variant="ghost">See All →</Button>
                     </Link>
                   </div>
-                  <PlaylistSection
-                    playlists={trendingPlaylists.slice(0, 6)}
-                    onPlaylistClick={handleCardClick}
-                  />
+                  {trendingLoading ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground text-sm">Loading...</p>
+                    </div>
+                  ) : (
+                    <PlaylistSection
+                      playlists={trendingPlaylists.slice(0, 6)}
+                      onPlaylistClick={handleCardClick}
+                    />
+                  )}
                 </div>
               )}
 
-              {/* Recommendations */}
+              {/* Recommended Playlists */}
               {recommendedPlaylists.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-2xl font-semibold">Recommended For You</h2>
                   </div>
-                  <PlaylistSection
-                    playlists={recommendedPlaylists}
-                    onPlaylistClick={handleCardClick}
-                  />
+                  {recommendedLoading ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground text-sm">Loading...</p>
+                    </div>
+                  ) : (
+                    <PlaylistSection
+                      playlists={recommendedPlaylists}
+                      onPlaylistClick={handleCardClick}
+                    />
+                  )}
                 </div>
               )}
 
               {/* Top Charts */}
-              {topCharts.length > 0 && (
+              {topChartsPlaylists.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-2xl font-semibold">Top Charts</h2>
@@ -254,14 +274,20 @@ export default function DiscoverPage() {
                       <Button variant="ghost">See All →</Button>
                     </Link>
                   </div>
-                  <PlaylistSection
-                    playlists={topCharts.slice(0, 6)}
-                    onPlaylistClick={handleCardClick}
-                  />
+                  {topChartsLoading ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground text-sm">Loading...</p>
+                    </div>
+                  ) : (
+                    <PlaylistSection
+                      playlists={topChartsPlaylists.slice(0, 6)}
+                      onPlaylistClick={handleCardClick}
+                    />
+                  )}
                 </div>
               )}
 
-              {/* Loading State */}
+              {/* Loading State - All sections */}
               {trendingLoading && recommendedLoading && topChartsLoading && (
                 <div className="text-center py-12">
                   <p className="text-muted-foreground">Loading discover content...</p>
@@ -274,7 +300,7 @@ export default function DiscoverPage() {
                 !topChartsLoading &&
                 trendingPlaylists.length === 0 &&
                 recommendedPlaylists.length === 0 &&
-                topCharts.length === 0 && (
+                topChartsPlaylists.length === 0 && (
                   <div className="text-center py-12">
                     <p className="text-muted-foreground">No content available</p>
                   </div>
