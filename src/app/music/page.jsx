@@ -101,9 +101,11 @@ export default function MusicPage() {
 
   // Read feed preference from localStorage (set in Settings)
   const [feedPreference, setFeedPreference] = useState('all');
+  const [isHydrated, setIsHydrated] = useState(false);
 
   // Read from localStorage after mount + re-read when tab becomes visible
   useEffect(() => {
+    setIsHydrated(true);
     const read = () => {
       const pref = localStorage.getItem('feed_preference') || 'all';
       setFeedPreference(pref);
@@ -115,8 +117,9 @@ export default function MusicPage() {
     return () => document.removeEventListener('visibilitychange', read);
   }, []);
 
-  const showIndian = feedPreference === 'indian' || feedPreference === 'all';
-  const showGlobal = feedPreference === 'global' || feedPreference === 'all';
+  const showIndian = isHydrated && (feedPreference === 'indian' || feedPreference === 'all');
+  const showGlobal = isHydrated && (feedPreference === 'global' || feedPreference === 'all');
+  const showDefault = !isHydrated; // Show everything by default during hydration
 
   const { playSong } = useMusicPlayer();
 
@@ -1257,7 +1260,7 @@ export default function MusicPage() {
           )}
 
           {/* Popular Hindi Playlists — from our playlists DB */}
-          {showIndian && (popularHindiLoading || popularHindiPlaylists.length > 0) && (
+          {(showDefault || showIndian) && (popularHindiLoading || popularHindiPlaylists.length > 0) && (
             <PlaylistSection
               title="Popular Hindi Playlists"
               playlists={popularHindiPlaylists}
@@ -1270,7 +1273,7 @@ export default function MusicPage() {
           )}
 
           {/* New & Trending */}
-          {showIndian && (dbSections.newTrending.loading || dbSections.newTrending.playlists.length > 0) && (
+          {(showDefault || showIndian) && (dbSections.newTrending.loading || dbSections.newTrending.playlists.length > 0) && (
             <PlaylistSection
               title="New & Trending"
               playlists={dbSections.newTrending.playlists}
@@ -1283,7 +1286,7 @@ export default function MusicPage() {
           )}
 
           {/* Bollywood Romance */}
-          {showIndian && (dbSections.bollywoodRomance.loading || dbSections.bollywoodRomance.playlists.length > 0) && (
+          {(showDefault || showIndian) && (dbSections.bollywoodRomance.loading || dbSections.bollywoodRomance.playlists.length > 0) && (
             <PlaylistSection
               title="Bollywood Romance"
               playlists={dbSections.bollywoodRomance.playlists}
@@ -1296,7 +1299,7 @@ export default function MusicPage() {
           )}
 
           {/* Chill & Sad */}
-          {showIndian && (dbSections.chillSad.loading || dbSections.chillSad.playlists.length > 0) && (
+          {(showDefault || showIndian) && (dbSections.chillSad.loading || dbSections.chillSad.playlists.length > 0) && (
             <PlaylistSection
               title="Chill & Sad"
               playlists={dbSections.chillSad.playlists}
@@ -1309,7 +1312,7 @@ export default function MusicPage() {
           )}
 
           {/* Popular Party Playlists */}
-          {showIndian && (dbSections.popularParty.loading || dbSections.popularParty.playlists.length > 0) && (
+          {(showDefault || showIndian) && (dbSections.popularParty.loading || dbSections.popularParty.playlists.length > 0) && (
             <PlaylistSection
               title="Popular Party Playlists"
               playlists={dbSections.popularParty.playlists}
@@ -1322,7 +1325,7 @@ export default function MusicPage() {
           )}
 
           {/* English Top Hits */}
-          {showGlobal && (dbSections.englishTopHits.loading || dbSections.englishTopHits.playlists.length > 0) && (
+          {(showDefault || showGlobal) && (dbSections.englishTopHits.loading || dbSections.englishTopHits.playlists.length > 0) && (
             <PlaylistSection
               title="English Top Hits"
               playlists={dbSections.englishTopHits.playlists}
@@ -1335,7 +1338,7 @@ export default function MusicPage() {
           )}
 
           {/* English New & Trending */}
-          {showGlobal && (dbSections.englishTrending.loading || dbSections.englishTrending.playlists.length > 0) && (
+          {(showDefault || showGlobal) && (dbSections.englishTrending.loading || dbSections.englishTrending.playlists.length > 0) && (
             <PlaylistSection
               title="English New & Trending"
               playlists={dbSections.englishTrending.playlists}
@@ -1348,7 +1351,7 @@ export default function MusicPage() {
           )}
 
           {/* Pop Essentials */}
-          {showGlobal && (dbSections.popEssentials.loading || dbSections.popEssentials.playlists.length > 0) && (
+          {(showDefault || showGlobal) && (dbSections.popEssentials.loading || dbSections.popEssentials.playlists.length > 0) && (
             <PlaylistSection
               title="Pop Essentials"
               playlists={dbSections.popEssentials.playlists}
@@ -1361,7 +1364,7 @@ export default function MusicPage() {
           )}
 
           {/* Dance Hits */}
-          {showGlobal && (dbSections.danceHits.loading || dbSections.danceHits.playlists.length > 0) && (
+          {(showDefault || showGlobal) && (dbSections.danceHits.loading || dbSections.danceHits.playlists.length > 0) && (
             <PlaylistSection
               title="Dance Hits"
               playlists={dbSections.danceHits.playlists}
