@@ -92,28 +92,30 @@ export default function DiscoverPage() {
     return () => { isMounted = false; };
   }, []);
 
-  // Fetch recommendations
+  // Fetch recommendations from JioSaavn API
   useEffect(() => {
     let isMounted = true;
     const fetchRecommendations = async () => {
       try {
-        const res = await fetch("/api/recommendations");
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+        // Fetch trending/recommended playlists from JioSaavn API
+        const res = await fetch(
+          `${apiUrl}/api/search/playlists?query=recommendation&page=0&limit=12`
+        );
         const data = await res.json();
 
-        if (isMounted && data.success && data.data?.length > 0) {
+        if (isMounted && data.success && data.data?.results) {
           setRecommendations(
-            data.data.map((mix) => ({
-              id: `mix-${mix.mixIndex}`,
-              _mixId: mix._id,
-              name: mix.title,
-              songIds: mix.songIds || [],
-              source: "mix",
-              image: mix.coverImage
-                ? [{ quality: "500x500", url: mix.coverImage }]
-                : [],
-              songCount: mix.songIds?.length || 0,
-              description: `${mix.songIds?.length || 0} songs`,
-            }))
+            data.data.results
+              .slice(0, 6)
+              .map((p) => ({
+                id: p.id,
+                name: p.title,
+                image: p.image ? [{ quality: "default", url: p.image }] : [],
+                songCount: p.songCount || 0,
+                description: p.description || "",
+                source: "jiosaavn",
+              }))
           );
         }
       } catch (err) {
