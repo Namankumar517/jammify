@@ -102,10 +102,13 @@ export default function MusicPage() {
   // Discover sections from saavn.sumit.co
   const [discoverTrending, setDiscoverTrending] = useState([]);
   const [discoverTrendingLoading, setDiscoverTrendingLoading] = useState(true);
+  const [discoverTrendingPage, setDiscoverTrendingPage] = useState(1);
   const [discoverBest, setDiscoverBest] = useState([]);
   const [discoverBestLoading, setDiscoverBestLoading] = useState(true);
+  const [discoverBestPage, setDiscoverBestPage] = useState(1);
   const [discoverTopCharts, setDiscoverTopCharts] = useState([]);
   const [discoverTopChartsLoading, setDiscoverTopChartsLoading] = useState(true);
+  const [discoverTopChartsPage, setDiscoverTopChartsPage] = useState(1);
 
   // Read feed preference from localStorage (set in Settings)
   const [feedPreference, setFeedPreference] = useState('all');
@@ -625,77 +628,126 @@ export default function MusicPage() {
     return () => clearInterval(timer);
   }, [refreshCooldown]);
 
-  // Fetch Discover sections from saavn.sumit.co
-  useEffect(() => {
-    let isMounted = true;
-    const fetchDiscoverSections = async () => {
-      try {
-        const [trendingRes, bestRes, chartsRes] = await Promise.all([
-          fetch("https://saavn.sumit.co/api/search/playlists?query=trending&page=1&limit=12"),
-          fetch("https://saavn.sumit.co/api/search/playlists?query=best&page=1&limit=12"),
-          fetch("https://saavn.sumit.co/api/search/playlists?query=top+charts&page=1&limit=12"),
-        ]);
+  // Fetch Discover sections from saavn.sumit.co with pagination
+  const fetchDiscoverSections = useCallback(async (page = 1) => {
+    try {
+      const [trendingRes, bestRes, chartsRes] = await Promise.all([
+        fetch(`https://saavn.sumit.co/api/search/playlists?query=trending&page=${page}&limit=12`),
+        fetch(`https://saavn.sumit.co/api/search/playlists?query=best&page=${page}&limit=12`),
+        fetch(`https://saavn.sumit.co/api/search/playlists?query=top+charts&page=${page}&limit=12`),
+      ]);
 
-        const trendingData = await trendingRes.json();
-        const bestData = await bestRes.json();
-        const chartsData = await chartsRes.json();
+      const trendingData = await trendingRes.json();
+      const bestData = await bestRes.json();
+      const chartsData = await chartsRes.json();
 
-        if (isMounted) {
-          if (trendingData.success && trendingData.data?.results) {
-            setDiscoverTrending(
-              trendingData.data.results.map((p) => ({
-                id: p.id,
-                name: p.name,
-                image: p.image || [],
-                songCount: p.songCount || 0,
-                description: p.language || "",
-                source: "jiosaavn",
-              }))
-            );
-          }
-          setDiscoverTrendingLoading(false);
-
-          if (bestData.success && bestData.data?.results) {
-            setDiscoverBest(
-              bestData.data.results.slice(0, 6).map((p) => ({
-                id: p.id,
-                name: p.name,
-                image: p.image || [],
-                songCount: p.songCount || 0,
-                description: p.language || "",
-                source: "jiosaavn",
-              }))
-            );
-          }
-          setDiscoverBestLoading(false);
-
-          if (chartsData.success && chartsData.data?.results) {
-            setDiscoverTopCharts(
-              chartsData.data.results.map((p) => ({
-                id: p.id,
-                name: p.name,
-                image: p.image || [],
-                songCount: p.songCount || 0,
-                description: p.language || "",
-                source: "jiosaavn",
-              }))
-            );
-          }
-          setDiscoverTopChartsLoading(false);
+      if (page === 1) {
+        if (trendingData.success && trendingData.data?.results) {
+          setDiscoverTrending(
+            trendingData.data.results.map((p) => ({
+              id: p.id,
+              name: p.name,
+              image: p.image || [],
+              songCount: p.songCount || 0,
+              description: p.language || "",
+              source: "jiosaavn",
+            }))
+          );
         }
-      } catch (err) {
-        console.error('Error fetching discover sections:', err);
-        if (isMounted) {
-          setDiscoverTrendingLoading(false);
-          setDiscoverBestLoading(false);
-          setDiscoverTopChartsLoading(false);
+        setDiscoverTrendingLoading(false);
+
+        if (bestData.success && bestData.data?.results) {
+          setDiscoverBest(
+            bestData.data.results.map((p) => ({
+              id: p.id,
+              name: p.name,
+              image: p.image || [],
+              songCount: p.songCount || 0,
+              description: p.language || "",
+              source: "jiosaavn",
+            }))
+          );
+        }
+        setDiscoverBestLoading(false);
+
+        if (chartsData.success && chartsData.data?.results) {
+          setDiscoverTopCharts(
+            chartsData.data.results.map((p) => ({
+              id: p.id,
+              name: p.name,
+              image: p.image || [],
+              songCount: p.songCount || 0,
+              description: p.language || "",
+              source: "jiosaavn",
+            }))
+          );
+        }
+        setDiscoverTopChartsLoading(false);
+      } else {
+        // Load more - append to existing
+        if (trendingData.success && trendingData.data?.results) {
+          setDiscoverTrending(prev => [...prev, ...trendingData.data.results.map((p) => ({
+            id: p.id,
+            name: p.name,
+            image: p.image || [],
+            songCount: p.songCount || 0,
+            description: p.language || "",
+            source: "jiosaavn",
+          }))]);
+        }
+
+        if (bestData.success && bestData.data?.results) {
+          setDiscoverBest(prev => [...prev, ...bestData.data.results.map((p) => ({
+            id: p.id,
+            name: p.name,
+            image: p.image || [],
+            songCount: p.songCount || 0,
+            description: p.language || "",
+            source: "jiosaavn",
+          }))]);
+        }
+
+        if (chartsData.success && chartsData.data?.results) {
+          setDiscoverTopCharts(prev => [...prev, ...chartsData.data.results.map((p) => ({
+            id: p.id,
+            name: p.name,
+            image: p.image || [],
+            songCount: p.songCount || 0,
+            description: p.language || "",
+            source: "jiosaavn",
+          }))]);
         }
       }
-    };
-
-    fetchDiscoverSections();
-    return () => { isMounted = false; };
+    } catch (err) {
+      console.error('Error fetching discover sections:', err);
+      setDiscoverTrendingLoading(false);
+      setDiscoverBestLoading(false);
+      setDiscoverTopChartsLoading(false);
+    }
   }, []);
+
+  // Initial load
+  useEffect(() => {
+    fetchDiscoverSections(1);
+  }, [fetchDiscoverSections]);
+
+  // Load more handler
+  const loadMoreDiscoverSections = async () => {
+    setDiscoverTrendingLoading(true);
+    setDiscoverBestLoading(true);
+    setDiscoverTopChartsLoading(true);
+    
+    const nextPage = Math.max(discoverTrendingPage, discoverBestPage, discoverTopChartsPage) + 1;
+    setDiscoverTrendingPage(nextPage);
+    setDiscoverBestPage(nextPage);
+    setDiscoverTopChartsPage(nextPage);
+    
+    await fetchDiscoverSections(nextPage);
+    
+    setDiscoverTrendingLoading(false);
+    setDiscoverBestLoading(false);
+    setDiscoverTopChartsLoading(false);
+  };
 
   const handlePlayClick = useCallback(async (item, type) => {
     if (type === 'liked-songs') {
@@ -1496,6 +1548,17 @@ export default function MusicPage() {
               playingId={playingId}
             />
           )}
+
+          {/* Load More Button for Endless Scroll */}
+          <div className="flex justify-center py-8">
+            <button
+              onClick={loadMoreDiscoverSections}
+              disabled={discoverTrendingLoading || discoverBestLoading || discoverTopChartsLoading}
+              className="px-8 py-3 rounded-full bg-green-500 hover:bg-green-400 disabled:bg-muted disabled:cursor-not-allowed text-black font-bold text-lg transition-all hover:scale-105 active:scale-95"
+            >
+              {discoverTrendingLoading || discoverBestLoading || discoverTopChartsLoading ? 'Loading...' : 'Load More'}
+            </button>
+          </div>
 
           {/* Bottom padding to prevent content being hidden behind music player */}
           <div className="pb-24" />
