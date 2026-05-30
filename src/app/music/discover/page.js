@@ -21,30 +21,33 @@ import {
 import { Button } from "@/components/ui/button";
 import { PlaylistSection } from "@/components/music/playlist-section";
 
-const JIOSAAVN_API = "https://saavn.sumit.co/api";
-
 export default function DiscoverPage() {
   const router = useRouter();
   const [trendingPlaylists, setTrendingPlaylists] = useState([]);
-  const [trendingLoading, setTrendingLoading] = useState(true);
   const [recommendedPlaylists, setRecommendedPlaylists] = useState([]);
-  const [recommendedLoading, setRecommendedLoading] = useState(true);
   const [topChartsPlaylists, setTopChartsPlaylists] = useState([]);
-  const [topChartsLoading, setTopChartsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch trending playlists
   useEffect(() => {
-    let isMounted = true;
-    const fetchTrending = async () => {
+    const fetchAllPlaylists = async () => {
       try {
-        const res = await fetch(
-          `${JIOSAAVN_API}/search/playlists?query=trending&page=1&limit=12`
-        );
-        const data = await res.json();
+        setIsLoading(true);
+        
+        // Fetch all three types in parallel
+        const [trendingRes, recommendedRes, topChartsRes] = await Promise.all([
+          fetch("https://saavn.sumit.co/api/search/playlists?query=trending&page=1&limit=12"),
+          fetch("https://saavn.sumit.co/api/search/playlists?query=recommended&page=1&limit=12"),
+          fetch("https://saavn.sumit.co/api/search/playlists?query=top+charts&page=1&limit=12"),
+        ]);
 
-        if (isMounted && data.success && data.data?.results) {
+        const trendingData = await trendingRes.json();
+        const recommendedData = await recommendedRes.json();
+        const topChartsData = await topChartsRes.json();
+
+        // Process trending
+        if (trendingData.success && trendingData.data?.results) {
           setTrendingPlaylists(
-            data.data.results.map((p) => ({
+            trendingData.data.results.map((p) => ({
               id: p.id,
               name: p.name,
               image: p.image || [],
@@ -54,65 +57,25 @@ export default function DiscoverPage() {
             }))
           );
         }
-      } catch (err) {
-        console.error("Error fetching trending playlists:", err);
-      } finally {
-        if (isMounted) setTrendingLoading(false);
-      }
-    };
 
-    fetchTrending();
-    return () => { isMounted = false; };
-  }, []);
-
-  // Fetch recommended playlists
-  useEffect(() => {
-    let isMounted = true;
-    const fetchRecommended = async () => {
-      try {
-        const res = await fetch(
-          `${JIOSAAVN_API}/search/playlists?query=recommended&page=1&limit=12`
-        );
-        const data = await res.json();
-
-        if (isMounted && data.success && data.data?.results) {
+        // Process recommended
+        if (recommendedData.success && recommendedData.data?.results) {
           setRecommendedPlaylists(
-            data.data.results
-              .slice(0, 6)
-              .map((p) => ({
-                id: p.id,
-                name: p.name,
-                image: p.image || [],
-                songCount: p.songCount || 0,
-                description: p.language || "",
-                source: "jiosaavn",
-              }))
+            recommendedData.data.results.slice(0, 6).map((p) => ({
+              id: p.id,
+              name: p.name,
+              image: p.image || [],
+              songCount: p.songCount || 0,
+              description: p.language || "",
+              source: "jiosaavn",
+            }))
           );
         }
-      } catch (err) {
-        console.error("Error fetching recommended playlists:", err);
-      } finally {
-        if (isMounted) setRecommendedLoading(false);
-      }
-    };
 
-    fetchRecommended();
-    return () => { isMounted = false; };
-  }, []);
-
-  // Fetch top charts playlists
-  useEffect(() => {
-    let isMounted = true;
-    const fetchTopCharts = async () => {
-      try {
-        const res = await fetch(
-          `${JIOSAAVN_API}/search/playlists?query=top+charts&page=1&limit=12`
-        );
-        const data = await res.json();
-
-        if (isMounted && data.success && data.data?.results) {
+        // Process top charts
+        if (topChartsData.success && topChartsData.data?.results) {
           setTopChartsPlaylists(
-            data.data.results.map((p) => ({
+            topChartsData.data.results.map((p) => ({
               id: p.id,
               name: p.name,
               image: p.image || [],
@@ -123,14 +86,13 @@ export default function DiscoverPage() {
           );
         }
       } catch (err) {
-        console.error("Error fetching top charts:", err);
+        console.error("Error fetching playlists:", err);
       } finally {
-        if (isMounted) setTopChartsLoading(false);
+        setIsLoading(false);
       }
     };
 
-    fetchTopCharts();
-    return () => { isMounted = false; };
+    fetchAllPlaylists();
   }, []);
 
   const handleCardClick = (playlist) => {
@@ -161,153 +123,124 @@ export default function DiscoverPage() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto w-full">
           <div className="w-full p-4 md:p-6">
-            <div className="max-w-7xl mx-auto space-y-8">
+            <div className="max-w-7xl mx-auto space-y-12">
               {/* Header */}
-              <div className="pt-2">
-                <h1 className="text-4xl font-bold tracking-tight mb-2">
-                  Discover
-                </h1>
-                <p className="text-muted-foreground text-base">
+              <div>
+                <h1 className="text-4xl font-bold tracking-tight">Discover</h1>
+                <p className="text-muted-foreground mt-2 text-base">
                   Explore trending playlists, personalized recommendations, and top charts
                 </p>
               </div>
 
-              {/* Quick Browse Categories */}
+              {/* Browse by Category */}
               <div>
-                <h2 className="text-2xl font-semibold mb-4">Browse by Category</h2>
+                <h2 className="text-2xl font-bold mb-6">Browse by Category</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <Link href="/music/discover/playlists">
-                    <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                      <h3 className="font-semibold text-lg">Trending Playlists</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Discover what's hot right now</p>
-                      <p className="text-xs text-muted-foreground mt-3">{trendingPlaylists.length} playlists</p>
+                    <div className="p-6 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer h-full">
+                      <h3 className="font-bold text-lg">Trending Playlists</h3>
+                      <p className="text-sm text-muted-foreground mt-2">Discover what's trending</p>
                     </div>
                   </Link>
 
                   <Link href="/music/discover/top-charts">
-                    <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                      <h3 className="font-semibold text-lg">Top Charts</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Most played and liked tracks</p>
-                      <p className="text-xs text-muted-foreground mt-3">{topChartsPlaylists.length} playlists</p>
+                    <div className="p-6 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer h-full">
+                      <h3 className="font-bold text-lg">Top Charts</h3>
+                      <p className="text-sm text-muted-foreground mt-2">Most played tracks</p>
                     </div>
                   </Link>
 
                   <Link href="/music/discover/genres">
-                    <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                      <h3 className="font-semibold text-lg">Genres</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Browse music by genre</p>
+                    <div className="p-6 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer h-full">
+                      <h3 className="font-bold text-lg">Genres</h3>
+                      <p className="text-sm text-muted-foreground mt-2">Browse by genre</p>
                     </div>
                   </Link>
 
                   <Link href="/music/discover/new-releases">
-                    <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                      <h3 className="font-semibold text-lg">New Releases</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Latest music releases</p>
+                    <div className="p-6 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer h-full">
+                      <h3 className="font-bold text-lg">New Releases</h3>
+                      <p className="text-sm text-muted-foreground mt-2">Latest music</p>
                     </div>
                   </Link>
 
                   <Link href="/music/discover/community">
-                    <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                      <h3 className="font-semibold text-lg">Community Playlists</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Playlists created by our community</p>
+                    <div className="p-6 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer h-full">
+                      <h3 className="font-bold text-lg">Community Playlists</h3>
+                      <p className="text-sm text-muted-foreground mt-2">User created</p>
                     </div>
                   </Link>
 
                   <Link href="/music/discover/recently-played">
-                    <div className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                      <h3 className="font-semibold text-lg">Recently Played</h3>
-                      <p className="text-sm text-muted-foreground mt-1">Get back to your listening history</p>
+                    <div className="p-6 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer h-full">
+                      <h3 className="font-bold text-lg">Recently Played</h3>
+                      <p className="text-sm text-muted-foreground mt-2">Your history</p>
                     </div>
                   </Link>
                 </div>
               </div>
 
-              {/* Trending Playlists */}
+              {/* Trending Section */}
               {trendingPlaylists.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-semibold">Trending Now</h2>
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold">Trending Now</h2>
                     <Link href="/music/discover/playlists">
-                      <Button variant="ghost">See All →</Button>
+                      <Button variant="ghost" className="text-primary">See All →</Button>
                     </Link>
                   </div>
-                  {trendingLoading ? (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground text-sm">Loading...</p>
-                    </div>
-                  ) : (
-                    <PlaylistSection
-                      playlists={trendingPlaylists.slice(0, 6)}
-                      onPlaylistClick={handleCardClick}
-                    />
-                  )}
+                  <PlaylistSection
+                    playlists={trendingPlaylists.slice(0, 6)}
+                    onPlaylistClick={handleCardClick}
+                  />
                 </div>
               )}
 
-              {/* Recommended Playlists */}
+              {/* Recommended Section */}
               {recommendedPlaylists.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-semibold">Recommended For You</h2>
-                  </div>
-                  {recommendedLoading ? (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground text-sm">Loading...</p>
-                    </div>
-                  ) : (
-                    <PlaylistSection
-                      playlists={recommendedPlaylists}
-                      onPlaylistClick={handleCardClick}
-                    />
-                  )}
+                  <h2 className="text-2xl font-bold mb-6">Recommended For You</h2>
+                  <PlaylistSection
+                    playlists={recommendedPlaylists}
+                    onPlaylistClick={handleCardClick}
+                  />
                 </div>
               )}
 
-              {/* Top Charts */}
+              {/* Top Charts Section */}
               {topChartsPlaylists.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-semibold">Top Charts</h2>
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold">Top Charts</h2>
                     <Link href="/music/discover/top-charts">
-                      <Button variant="ghost">See All →</Button>
+                      <Button variant="ghost" className="text-primary">See All →</Button>
                     </Link>
                   </div>
-                  {topChartsLoading ? (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground text-sm">Loading...</p>
-                    </div>
-                  ) : (
-                    <PlaylistSection
-                      playlists={topChartsPlaylists.slice(0, 6)}
-                      onPlaylistClick={handleCardClick}
-                    />
-                  )}
+                  <PlaylistSection
+                    playlists={topChartsPlaylists.slice(0, 6)}
+                    onPlaylistClick={handleCardClick}
+                  />
                 </div>
               )}
 
-              {/* Loading State - All sections */}
-              {trendingLoading && recommendedLoading && topChartsLoading && (
-                <div className="text-center py-12">
+              {/* Loading State */}
+              {isLoading && (
+                <div className="flex justify-center items-center py-20">
                   <p className="text-muted-foreground">Loading discover content...</p>
                 </div>
               )}
 
               {/* Empty State */}
-              {!trendingLoading &&
-                !recommendedLoading &&
-                !topChartsLoading &&
-                trendingPlaylists.length === 0 &&
-                recommendedPlaylists.length === 0 &&
-                topChartsPlaylists.length === 0 && (
-                  <div className="text-center py-12">
-                    <p className="text-muted-foreground">No content available</p>
-                  </div>
-                )}
+              {!isLoading && trendingPlaylists.length === 0 && recommendedPlaylists.length === 0 && topChartsPlaylists.length === 0 && (
+                <div className="flex justify-center items-center py-20">
+                  <p className="text-muted-foreground">No content available</p>
+                </div>
+              )}
 
-              {/* Bottom padding for music player */}
-              <div className="pb-24" />
+              {/* Spacer */}
+              <div className="h-32" />
             </div>
           </div>
         </div>
