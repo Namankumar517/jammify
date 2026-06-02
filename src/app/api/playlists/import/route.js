@@ -176,7 +176,20 @@ export async function POST(request) {
         );
 
         const importStart = Date.now();
-        await connectDB();
+        
+        try {
+            await connectDB();
+        } catch (dbErr) {
+            console.error('[Import] Database connection failed:', dbErr.message);
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: 'Database connection failed. Please check your MongoDB configuration.',
+                    details: dbErr.message
+                },
+                { status: 503 }
+            );
+        }
 
         const isYouTubeSource = sourceName === 'youtube';
         const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';

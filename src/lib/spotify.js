@@ -169,6 +169,7 @@ export async function getPlaylistData(playlistId) {
                     artists: (track.artists || []).map(artist => ({
                         name: artist.name,
                     })),
+                    spotifyId: track.id, // Keep spotifyId for matcher compatibility
                     id: track.id,
                     duration_ms: track.duration_ms || 0,
                     external_ids: track.external_ids || {},
