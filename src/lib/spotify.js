@@ -1,89 +1,176 @@
-import https from 'https';
-
 /**
  * Spotify API Integration Helper
- * Uses the spotify-scraper API. Single call returns both playlist details and all tracks.
+ * Uses the official Spotify Web API with Client Credentials flow
  */
 
-function spotifyRequest(url, options) {
-    return new Promise((resolve, reject) => {
-        const req = https.request(url, options, (res) => {
-            let data = '';
-            res.on('data', (chunk) => data += chunk);
-            res.on('end', () => {
-                if (res.statusCode === 429) {
-                    reject({ status: 429, retryAfter: res.headers['retry-after'] });
-                    return;
-                }
-                if (res.statusCode >= 200 && res.statusCode < 300) {
-                    try { resolve(JSON.parse(data)); } catch (e) { resolve(data); }
-                } else {
-                    reject(new Error(`Spotify Request Failed: ${res.statusCode} ${data}`));
-                }
-            });
+let cachedAccessToken = null;
+let tokenExpiresAt = null;
+
+/**
+ * Get a valid access token from Spotify API
+ * Implements caching with expiration to minimize API calls
+ */
+async function getSpotifyAccessToken() {
+    const now = Date.now();
+    
+    // Return cached token if still valid
+    if (cachedAccessToken && tokenExpiresAt && now < tokenExpiresAt) {
+        return cachedAccessToken;
+    }
+
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+        throw new Error('Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET environment variables');
+    }
+
+    const authString = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    
+    try {
+        const response = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${authString}`,
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'grant_type=client_credentials',
         });
-        req.on('error', (e) => { console.error('Spotify Request Error:', e); reject(e); });
-        req.end();
-    });
-}
 
-function decodeEntities(text) {
-    if (!text) return '';
-    return text
-        .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&apos;/g, "'")
-        .trim();
-}
+        if (!response.ok) {
+            const error = await response.json();
+            console.error('[Spotify Auth] Error:', error);
+            throw new Error(`Spotify auth failed: ${error.error_description || 'Unknown error'}`);
+        }
 
-function splitArtists(artistData) {
-    if (!artistData) return [{ name: 'Unknown Artist' }];
-    const artists = [];
-    const rawList = Array.isArray(artistData) ? artistData : [artistData];
-    rawList.forEach(item => {
-        const decoded = decodeEntities(item);
-        const parts = decoded.split(/\s*&\s*|\s*,\s*|\s+feat\.\s+|\s+ft\.\s+/i);
-        parts.forEach(p => { const clean = p.trim(); if (clean.length > 0) artists.push({ name: clean }); });
-    });
-    return artists.length > 0 ? artists : [{ name: 'Unknown Artist' }];
+        const data = await response.json();
+        cachedAccessToken = data.access_token;
+        // Cache for slightly less than actual expiration (1 second buffer)
+        tokenExpiresAt = now + (data.expires_in * 1000) - 1000;
+        
+        console.log('[Spotify Auth] Got new access token');
+        return cachedAccessToken;
+    } catch (error) {
+        console.error('[Spotify Auth] Failed:', error);
+        throw error;
+    }
 }
 
 /**
- * OPTIMIZED: Single API call that returns BOTH playlist details and tracks.
- * This eliminates the double network round-trip the old code had.
+ * Make a request to Spotify Web API
+ */
+async function spotifyRequest(endpoint) {
+    const accessToken = await getSpotifyAccessToken();
+    
+    try {
+        const response = await fetch(`https://api.spotify.com/v1${endpoint}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+            },
+        });
+
+        if (response.status === 429) {
+            const retryAfter = response.headers.get('retry-after') || '30';
+            throw { status: 429, retryAfter: parseInt(retryAfter) };
+        }
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(`Spotify API Error ${response.status}: ${error.error?.message || 'Unknown error'}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('[Spotify API]', error);
+        throw error;
+    }
+}
+
+/**
+ * Fetch all tracks from a playlist (handles pagination)
+ */
+async function getAllPlaylistTracks(playlistId) {
+    const tracks = [];
+    let offset = 0;
+    const limit = 50; // Max items per request
+
+    try {
+        while (true) {
+            const endpoint = `/playlists/${playlistId}/tracks?offset=${offset}&limit=${limit}`;
+            const response = await spotifyRequest(endpoint);
+            
+            tracks.push(...(response.items || []));
+            
+            if (!response.next) break; // No more pages
+            offset += limit;
+        }
+        return tracks;
+    } catch (error) {
+        console.error(`[Spotify] Error fetching tracks for playlist ${playlistId}:`, error);
+        throw error;
+    }
+}
+
+/**
+ * Get playlist details
+ */
+async function getPlaylistInfo(playlistId) {
+    try {
+        const endpoint = `/playlists/${playlistId}`;
+        return await spotifyRequest(endpoint);
+    } catch (error) {
+        console.error(`[Spotify] Error fetching playlist info for ${playlistId}:`, error);
+        throw error;
+    }
+}
+
+/**
+ * Main function: Fetch playlist data from Spotify Web API
  */
 export async function getPlaylistData(playlistId) {
     try {
-        const baseUrl = process.env.SPOTIFY_SCRAPER_API_URL;
-        const externalApiUrl = `${baseUrl}${playlistId}`;
         console.log(`[Spotify] Fetching playlist data: ${playlistId}`);
 
-        const data = await spotifyRequest(externalApiUrl, {
-            method: 'GET',
-            headers: { 'User-Agent': 'Jammify/1.0' },
-        });
+        // Fetch playlist details and tracks in parallel
+        const [playlistInfo, spotifyTracks] = await Promise.all([
+            getPlaylistInfo(playlistId),
+            getAllPlaylistTracks(playlistId),
+        ]);
 
-        if (!data || !data.success || !data.playlist || !data.tracks) return null;
+        if (!playlistInfo) {
+            console.error('[Spotify] No playlist info returned');
+            return null;
+        }
 
         const details = {
-            name: decodeEntities(data.playlist.name || 'Imported Playlist'),
-            description: decodeEntities(data.playlist.description || (data.playlist.owner ? `By ${data.playlist.owner}` : '')),
-            images: data.playlist.images || []
+            name: playlistInfo.name || 'Imported Playlist',
+            description: playlistInfo.description || '',
+            images: playlistInfo.images || [],
         };
 
-        const tracks = data.tracks.map(track => ({
-            name: decodeEntities(track.name),
-            artists: splitArtists(track.artists),
-            id: track.id,
-            duration_ms: track.duration?.ms || 0
-        })).filter(t => t.id);
+        // Convert Spotify tracks to our format
+        const tracks = spotifyTracks
+            .map(item => {
+                const track = item.track;
+                if (!track || !track.id) return null;
 
+                return {
+                    name: track.name,
+                    artists: (track.artists || []).map(artist => ({
+                        name: artist.name,
+                    })),
+                    id: track.id,
+                    duration_ms: track.duration_ms || 0,
+                    external_ids: track.external_ids || {},
+                };
+            })
+            .filter(Boolean);
+
+        console.log(`[Spotify] Fetched ${tracks.length} tracks from "${details.name}"`);
         return { details, tracks };
-    } catch (e) {
-        console.error('Error fetching playlist data:', e);
+    } catch (error) {
+        console.error('[Spotify] Error fetching playlist data:', error);
         return null;
     }
 }
