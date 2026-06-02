@@ -15,19 +15,26 @@ async function getSpotifyAccessToken() {
     
     // Return cached token if still valid
     if (cachedAccessToken && tokenExpiresAt && now < tokenExpiresAt) {
+        console.log('[Spotify Auth] Using cached token');
         return cachedAccessToken;
     }
 
     const clientId = process.env.SPOTIFY_CLIENT_ID;
     const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
 
+    console.log('[Spotify Auth] Checking credentials - ID exists:', !!clientId, ', Secret exists:', !!clientSecret);
+
     if (!clientId || !clientSecret) {
-        throw new Error('Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET environment variables');
+        const msg = 'Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET environment variables';
+        console.error('[Spotify Auth] ERROR:', msg);
+        console.error('[Spotify Auth] Available env vars:', Object.keys(process.env).filter(k => k.includes('SPOTIFY')));
+        throw new Error(msg);
     }
 
     const authString = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
     
     try {
+        console.log('[Spotify Auth] Requesting access token from Spotify...');
         const response = await fetch('https://accounts.spotify.com/api/token', {
             method: 'POST',
             headers: {
@@ -37,10 +44,18 @@ async function getSpotifyAccessToken() {
             body: 'grant_type=client_credentials',
         });
 
+        console.log('[Spotify Auth] Token response status:', response.status);
+
         if (!response.ok) {
-            const error = await response.json();
-            console.error('[Spotify Auth] Error:', error);
-            throw new Error(`Spotify auth failed: ${error.error_description || 'Unknown error'}`);
+            const errorText = await response.text();
+            console.error('[Spotify Auth] Token error response:', response.status, errorText);
+            let error = {};
+            try {
+                error = JSON.parse(errorText);
+            } catch (e) {
+                error = { error_description: errorText };
+            }
+            throw new Error(`Spotify auth failed (${response.status}): ${error.error_description || 'Unknown error'}`);
         }
 
         const data = await response.json();
@@ -48,10 +63,10 @@ async function getSpotifyAccessToken() {
         // Cache for slightly less than actual expiration (1 second buffer)
         tokenExpiresAt = now + (data.expires_in * 1000) - 1000;
         
-        console.log('[Spotify Auth] Got new access token');
+        console.log('[Spotify Auth] Successfully obtained access token');
         return cachedAccessToken;
     } catch (error) {
-        console.error('[Spotify Auth] Failed:', error);
+        console.error('[Spotify Auth] Failed:', error.message);
         throw error;
     }
 }
@@ -60,29 +75,50 @@ async function getSpotifyAccessToken() {
  * Make a request to Spotify Web API
  */
 async function spotifyRequest(endpoint) {
-    const accessToken = await getSpotifyAccessToken();
+    console.log('[Spotify API] Requesting endpoint:', endpoint);
+    
+    let accessToken;
+    try {
+        accessToken = await getSpotifyAccessToken();
+    } catch (error) {
+        console.error('[Spotify API] Failed to get access token:', error.message);
+        throw error;
+    }
     
     try {
-        const response = await fetch(`https://api.spotify.com/v1${endpoint}`, {
+        const url = `https://api.spotify.com/v1${endpoint}`;
+        console.log('[Spotify API] Fetching:', url);
+        
+        const response = await fetch(url, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
             },
         });
 
+        console.log('[Spotify API] Response status for', endpoint, ':', response.status);
+
         if (response.status === 429) {
             const retryAfter = response.headers.get('retry-after') || '30';
+            console.error('[Spotify API] Rate limited, retry after:', retryAfter);
             throw { status: 429, retryAfter: parseInt(retryAfter) };
         }
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(`Spotify API Error ${response.status}: ${error.error?.message || 'Unknown error'}`);
+            const errorText = await response.text();
+            console.error('[Spotify API] Error response:', response.status, errorText);
+            let error = {};
+            try {
+                error = JSON.parse(errorText);
+            } catch (e) {
+                // Not JSON response
+            }
+            throw new Error(`Spotify API Error ${response.status}: ${error.error?.message || errorText || 'Unknown error'}`);
         }
 
         return await response.json();
     } catch (error) {
-        console.error('[Spotify API]', error);
+        console.error('[Spotify API] Request failed for', endpoint, ':', error.message);
         throw error;
     }
 }
@@ -130,18 +166,21 @@ async function getPlaylistInfo(playlistId) {
  */
 export async function getPlaylistData(playlistId) {
     try {
-        console.log(`[Spotify] Fetching playlist data: ${playlistId}`);
+        console.log(`[Spotify] START: Fetching playlist data for ID: ${playlistId}`);
 
         // Fetch playlist details and tracks in parallel
+        console.log('[Spotify] Fetching playlist info and tracks in parallel...');
         const [playlistInfo, spotifyTracks] = await Promise.all([
             getPlaylistInfo(playlistId),
             getAllPlaylistTracks(playlistId),
         ]);
 
         if (!playlistInfo) {
-            console.error('[Spotify] No playlist info returned');
+            console.error('[Spotify] ERROR: No playlist info returned');
             return null;
         }
+
+        console.log('[Spotify] Playlist info retrieved:', playlistInfo.name, '- Total tracks:', spotifyTracks.length);
 
         const details = {
             name: playlistInfo.name || 'Imported Playlist',
@@ -167,10 +206,11 @@ export async function getPlaylistData(playlistId) {
             })
             .filter(Boolean);
 
-        console.log(`[Spotify] Fetched ${tracks.length} tracks from "${details.name}"`);
+        console.log(`[Spotify] SUCCESS: Fetched ${tracks.length} valid tracks from "${details.name}"`);
         return { details, tracks };
     } catch (error) {
-        console.error('[Spotify] Error fetching playlist data:', error);
+        console.error('[Spotify] FAILED: Error fetching playlist data:', error.message);
+        console.error('[Spotify] Stack:', error.stack);
         return null;
     }
 }
