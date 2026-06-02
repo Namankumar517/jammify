@@ -85,8 +85,15 @@ async function spotifyRequest(endpoint) {
         }
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(`Spotify API Error ${response.status}: ${error.error?.message || 'Unknown error'}`);
+            let error;
+            try {
+                error = await response.json();
+            } catch (e) {
+                error = { error: { message: 'Failed to parse error response' } };
+            }
+            const errorMsg = `Spotify API Error ${response.status}: ${error.error?.message || JSON.stringify(error)}`;
+            console.error('[Spotify API]', errorMsg);
+            throw new Error(errorMsg);
         }
 
         return await response.json();
