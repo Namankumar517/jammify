@@ -7,6 +7,13 @@ let cachedAccessToken = null;
 let tokenExpiresAt = null;
 
 /**
+ * Check if Spotify credentials are configured
+ */
+export function isSpotifyConfigured() {
+    return !!(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET);
+}
+
+/**
  * Get a valid access token from Spotify API
  * Implements caching with expiration to minimize API calls
  */
@@ -22,7 +29,9 @@ async function getSpotifyAccessToken() {
     const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
 
     if (!clientId || !clientSecret) {
-        throw new Error('Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET environment variables');
+        const errorMsg = 'Spotify API credentials not configured. Please add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to your .env.local file. See .env.local.example for instructions.';
+        console.error('[Spotify Auth]', errorMsg);
+        throw new Error(errorMsg);
     }
 
     const authString = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');

@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/mongodb';
 import Playlist from '@/models/Playlist';
-import { getPlaylistData } from '@/lib/spotify';
+import { getPlaylistData, isSpotifyConfigured } from '@/lib/spotify';
 import {
     matchAllTracks,
     ACCEPT_THRESHOLD,
@@ -97,6 +97,19 @@ export async function POST(request) {
         if (url.includes('spotify.com/playlist/')) {
             sourceName = 'spotify';
             playlistId = url.split('/playlist/')[1]?.split('?')[0];
+            
+            // Check if Spotify is configured before proceeding
+            if (!isSpotifyConfigured()) {
+                console.error('[Import] Spotify credentials not configured');
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: 'Spotify import is not configured. Please contact the administrator to set up Spotify API credentials.',
+                        details: 'Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET'
+                    },
+                    { status: 503 }
+                );
+            }
         } else if (url.includes('music.youtube.com/playlist')) {
             sourceName = 'youtube';
             playlistId = new URLSearchParams(url.split('?')[1]).get('list');
@@ -121,17 +134,31 @@ export async function POST(request) {
         console.log(`[Import] Source: ${sourceName}, ID: ${playlistId}`);
 
         // ── Fetch source playlist ─────────────────────────────────────────────
-        const playlistData =
-            sourceName === 'spotify'
-                ? await getPlaylistData(playlistId)
-                : await fetchYouTubeMusicPlaylist(playlistId);
+        let playlistData = null;
+        let fetchError = null;
+        
+        try {
+            playlistData =
+                sourceName === 'spotify'
+                    ? await getPlaylistData(playlistId)
+                    : await fetchYouTubeMusicPlaylist(playlistId);
+        } catch (err) {
+            console.error(`[Import] Fetch error (${sourceName}):`, err.message);
+            fetchError = err.message;
+        }
 
         if (!playlistData) {
-            const msg =
-                sourceName === 'spotify'
-                    ? 'Failed to fetch playlist from Spotify. Make sure the playlist is public.'
-                    : 'Failed to fetch playlist from YouTube Music. Make sure the playlist is public.';
-            return NextResponse.json({ success: false, error: msg }, { status: 404 });
+            let msg;
+            if (fetchError?.includes('credentials')) {
+                msg = 'Spotify API credentials are not configured. Please contact the administrator.';
+            } else if (fetchError?.includes('401') || fetchError?.includes('Unauthorized')) {
+                msg = 'Invalid Spotify API credentials. Please check your configuration.';
+            } else if (sourceName === 'spotify') {
+                msg = 'Failed to fetch playlist from Spotify. Make sure:\n1. The playlist is PUBLIC\n2. The playlist URL is correct\n3. The playlist exists';
+            } else {
+                msg = 'Failed to fetch playlist from YouTube Music. Make sure:\n1. The playlist is PUBLIC\n2. The playlist URL is correct\n3. It\'s not a radio/mix playlist (starting with "RD")';
+            }
+            return NextResponse.json({ success: false, error: msg, details: fetchError }, { status: 404 });
         }
 
         const { details, tracks: sourceTracks } = playlistData;

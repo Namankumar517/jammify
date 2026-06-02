@@ -293,6 +293,7 @@ src/
 | [`FEATURES.md`](./FEATURES.md) | Detailed feature list |
 | [`MATCHER_ALGORITHM.md`](./MATCHER_ALGORITHM.md) | Track matching algorithm documentation |
 | [`music_recommendation_system.md`](./music_recommendation_system.md) | Recommendation engine design |
+| [`SPOTIFY_SETUP.md`](./SPOTIFY_SETUP.md) | 🎵 **Spotify API setup guide for playlist imports** |
 
 ---
 
