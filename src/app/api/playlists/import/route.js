@@ -151,10 +151,12 @@ export async function POST(request) {
             let msg;
             if (fetchError?.includes('credentials')) {
                 msg = 'Spotify API credentials are not configured. Please contact the administrator.';
+            } else if (fetchError?.includes('403') || fetchError?.includes('Forbidden')) {
+                msg = 'Spotify API access denied (403 Forbidden). This usually means:\n1. Your Spotify app has scope restrictions\n2. Try creating a NEW Spotify app at https://developer.spotify.com/dashboard\n3. Or use YouTube Music import instead';
             } else if (fetchError?.includes('401') || fetchError?.includes('Unauthorized')) {
                 msg = 'Invalid Spotify API credentials. Please check your configuration.';
             } else if (sourceName === 'spotify') {
-                msg = 'Failed to fetch playlist from Spotify. Make sure:\n1. The playlist is PUBLIC\n2. The playlist URL is correct\n3. The playlist exists';
+                msg = 'Failed to fetch playlist from Spotify. Make sure:\n1. The playlist is PUBLIC\n2. The playlist URL is correct\n3. The playlist exists\n4. Try using YouTube Music import as an alternative';
             } else {
                 msg = 'Failed to fetch playlist from YouTube Music. Make sure:\n1. The playlist is PUBLIC\n2. The playlist URL is correct\n3. It\'s not a radio/mix playlist (starting with "RD")';
             }
